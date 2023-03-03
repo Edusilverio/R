@@ -1,0 +1,75 @@
+library(rtweet)
+library(RColorBrewer)
+library(wordcloud)
+library(tm)
+library(syuzhet)
+
+### Configuração token
+twitter_token <- create_token(
+  app = "data_science_ppgia", 
+  consumer_key="",
+  consumer_secret="", 
+  access_token="",
+  access_secret="",
+  set_renv = TRUE)
+
+##Obtençao dos dados dos tweets
+stf <- search_tweets("#PALAVRACHAVE", 
+                     n=1000, 
+                     include_rts=FALSE, 
+                     lang="pt", 
+                     token = twitter_token)
+
+## Geração do corpus com os textos dos tweets
+corpus <- Corpus(VectorSource(stf$text))
+
+## Converte todas as palavas para minusculo
+corpus <- tm_map(corpus, tolower)
+
+## Remove as pontuações
+corpus <- tm_map(corpus, removePunctuation)
+
+## Remove os espaços em brancos em excesso
+corpus <- tm_map(corpus, stripWhitespace)
+
+## remove as stopwords considerando o dicionario em portugues de palavras
+corpus <- tm_map(corpus, removeWords, stopwords('portuguese'))
+
+## remove urls
+removeUrl <- function(x) { gsub("http[^[:space:]]*", "",x) }
+corpus <- tm_map(corpus, removeUrl)
+
+## remove lixo do texto
+removeLixo <- function(x) { gsub("[^[:alpha:][:space:]]*", "", x) }
+corpus <- tm_map(corpus, removeLixo)
+
+## Converte o corpus em uma matriz
+matrix <- as.matrix(TermDocumentMatrix(corpus)) 
+## ordena as palavras por incidencia
+words_PALAVRACHAVE <- sort(rowSums(matrix),decreasing=TRUE) 
+df <- data.frame(word = names(words_PALAVRACHAVE[1:1000]),freq=words_PALAVRACHAVE[1:1000])
+
+set.seed(1234)
+## Gera a wordcloud
+wordcloud(words = df$word, freq = df$freq, min.freq = 1,
+          max.words=100, random.order=FALSE, rot.per=0.35,
+          colors=brewer.pal(8, "Dark2"), )
+## faz a analise de sentimentos
+sentimentos <- get_nrc_sentiment(stf$text)
+
+## gera o grafico em barras e salva em uma variavel
+x <- barplot(
+  colSums(sentimentos), 
+  axisnames = T,
+  names.arg = colnames(sentimentos), 
+  horiz = F, 
+  las = 2,
+  font.axis = 2,
+  col.axis = "red",
+  ylab = "Quantidade", main = "Pontuação dos sentimentos para os tweets #PALAVRACHAVE",
+  ylim = c(0,300))
+
+valores <- colSums(sentimentos)+10
+
+## coloca um label com os valores de cada coluna acima da coluna
+text(x, valores ,colSums(sentimentos))
